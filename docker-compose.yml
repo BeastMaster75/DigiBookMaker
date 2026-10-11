@@ -1,0 +1,8 @@
+services:
+  digibook:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./library:/data
+    restart: unless-stopped

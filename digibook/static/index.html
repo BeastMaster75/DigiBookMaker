@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DigiBookMaker</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e2e0da;
+    --accent: #2f6fed; --accent-text: #ffffff; --ok: #1f8a4c; --err: #c4352b; --hl: #ffe76a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --card: #1e1e21; --text: #ececee; --muted: #9a9aa2; --line: #333338;
+      --accent: #5b8cff; --accent-text: #0d0d0f; --ok: #4cc07c; --err: #ff6b5e; --hl: #6b5b00;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans", "Noto Sans JP", "Noto Sans Arabic", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  p.sub { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  #drop { border: 2px dashed var(--line); border-radius: 12px; padding: 32px 16px; text-align: center;
+          cursor: pointer; transition: border-color .15s, background .15s; }
+  #drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  #drop strong { display: block; font-size: 16px; }
+  #drop span { color: var(--muted); font-size: 13px; }
+  #picked { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+  label { display: block; font-size: 13px; color: var(--muted); }
+  input[type=text], input[type=search], select { width: 100%; margin-top: 4px; padding: 8px 10px; font: inherit;
+         color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+  button { font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 9px; border: 0; cursor: pointer;
+           background: var(--accent); color: var(--accent-text); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 6px 10px; font-weight: 500; }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 10px 0 6px; }
+  .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .job { padding: 12px 0; border-top: 1px solid var(--line); }
+  .job:first-child { border-top: 0; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status.err { color: var(--err); }
+  .status.ok { color: var(--ok); }
+  .links a { margin-right: 14px; color: var(--accent); text-decoration: none; font-weight: 500; }
+  .book { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .book:first-child { border-top: 0; }
+  .book .meta { color: var(--muted); font-size: 13px; }
+  .hit { padding: 10px 0; border-top: 1px solid var(--line); }
+  .hit:first-child { border-top: 0; }
+  .hit .snip { color: var(--muted); font-size: 14px; unicode-bidi: plaintext; }
+  mark { background: var(--hl); color: inherit; border-radius: 3px; padding: 0 2px; }
+  .empty { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>DigiBookMaker</h1>
+  <p class="sub">Drop photos or scans of book pages. You get back one clean, same-size, searchable PDF, plus the text and your highlights.</p>
+
+  <section class="card">
+    <h2>New book</h2>
+    <div id="drop" tabindex="0">
+      <strong>Drop page photos here, or click to choose</strong>
+      <span>JPG, PNG, HEIC or PDF. Pages are ordered by file name (IMG_001, IMG_002, …)</span>
+      <input id="files" type="file" multiple accept="image/*,.heic,.heif,.pdf" hidden>
+    </div>
+    <div id="picked"></div>
+    <div class="grid">
+      <label>Title<input id="title" type="text" placeholder="My book"></label>
+      <label>Language
+        <select id="lang">
+          <option value="auto">Auto-detect</option>
+          <option value="eng">English</option>
+          <option value="japanese">Japanese (horizontal)</option>
+          <option value="vertical">Japanese (vertical / tategaki)</option>
+          <option value="arabic">Arabic</option>
+          <option value="all">Mixed English + Japanese + Arabic</option>
+        </select>
+      </label>
+      <label>Page look
+        <select id="mode">
+          <option value="color">Cleaned colour</option>
+          <option value="gray">Grayscale</option>
+          <option value="bw">Black &amp; white</option>
+          <option value="original">Untouched photo</option>
+        </select>
+      </label>
+      <label>Page size
+        <select id="page_size">
+          <option value="auto">Match my pages</option>
+          <option value="a5">A5</option>
+          <option value="a4">A4</option>
+          <option value="b6">B6</option>
+          <option value="bunko">Bunko (A6)</option>
+          <option value="letter">Letter</option>
+        </select>
+      </label>
+      <label>Two-page photos
+        <select id="split">
+          <option value="auto">Split automatically</option>
+          <option value="on">Always split</option>
+          <option value="off">Never split</option>
+        </select>
+      </label>
+    </div>
+    <button id="go" disabled>Make book</button>
+    <div id="jobs" style="margin-top:12px"></div>
+  </section>
+
+  <section class="card">
+    <h2>Search all books</h2>
+    <input id="q" type="search" placeholder="Search in any language: words, 日本語, العربية">
+    <div id="hits" style="margin-top:10px"></div>
+  </section>
+
+  <section class="card">
+    <h2>Library</h2>
+    <div id="books"><p class="empty">No books yet.</p></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let picked = [];
+
+function setFiles(list) {
+  picked = [...list];
+  $("picked").textContent = picked.length ? `${picked.length} file(s): ${picked.map(f => f.name).slice(0, 6).join(", ")}${picked.length > 6 ? ", …" : ""}` : "";
+  $("go").disabled = !picked.length;
+}
+$("drop").onclick = () => $("files").click();
+$("drop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") $("files").click(); };
+$("files").onchange = (e) => setFiles(e.target.files);
+["dragenter", "dragover"].forEach(ev => $("drop").addEventListener(ev, (e) => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => $("drop").addEventListener(ev, (e) => { e.preventDefault(); $("drop").classList.remove("over"); }));
+$("drop").addEventListener("drop", (e) => setFiles(e.dataTransfer.files));
+
+function links(slug, pdf) {
+  const base = `/files/${encodeURIComponent(slug)}/`;
+  return `<span class="links">${pdf ? `<a href="${base}${encodeURIComponent(pdf)}" target="_blank">PDF</a>` : ""}` +
+         `<a href="${base}text.md" target="_blank">Text</a><a href="${base}highlights.md" target="_blank">Highlights</a>` +
+         `<a href="${base}book.json" target="_blank">Details</a></span>`;
+}
+
+$("go").onclick = async () => {
+  const fd = new FormData();
+  picked.forEach(f => fd.append("files", f, f.name));
+  ["title", "lang", "mode", "page_size", "split"].forEach(k => fd.append(k, $(k).value));
+  $("go").disabled = true;
+  const row = document.createElement("div");
+  row.className = "job";
+  row.innerHTML = `<strong>${esc($("title").value || "Untitled book")}</strong><div class="bar"><div></div></div><div class="status">Uploading…</div>`;
+  $("jobs").prepend(row);
+  try {
+    const res = await fetch("/api/books", { method: "POST", body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const { job } = await res.json();
+    setFiles([]); $("files").value = ""; $("title").value = "";
+    poll(job, row);
+  } catch (err) {
+    row.querySelector(".status").className = "status err";
+    row.querySelector(".status").textContent = "Upload failed: " + err.message;
+    $("go").disabled = !picked.length;
+  }
+};
+
+async function poll(job, row) {
+  const s = await (await fetch(`/api/jobs/${job}`)).json();
+  const bar = row.querySelector(".bar div"), st = row.querySelector(".status");
+  if (s.status === "done") {
+    const r = s.result;
+    bar.style.width = "100%";
+    row.querySelector("strong").textContent = r.title;
+    st.className = "status ok";
+    st.innerHTML = `Done in ${r.seconds}s: ${r.pages} pages, ${r.highlights} highlights, ${r.figures} pictures. ` + links(r.slug, r.pdf);
+    loadBooks();
+    return;
+  }
+  if (s.status === "error") {
+    st.className = "status err";
+    st.textContent = "Failed: " + s.error;
+    return;
+  }
+  bar.style.width = `${Math.round(100 * s.done / Math.max(1, s.total))}%`;
+  st.textContent = s.status === "queued" ? "Waiting for the previous book…" : `${s.stage} (${s.done}/${s.total})`;
+  setTimeout(() => poll(job, row), 1000);
+}
+
+async function loadBooks() {
+  const books = await (await fetch("/api/books")).json();
+  $("books").innerHTML = books.length ? books.map(b => `
+    <div class="book"><div><strong>${esc(b.title)}</strong>
+      <div class="meta">${b.pages} pages · ${new Date(b.created * 1000).toLocaleString()}</div></div>
+      <div>${links(b.slug, b.pdf)}<button class="ghost" data-del="${esc(b.slug)}">Delete</button></div></div>`).join("")
+    : `<p class="empty">No books yet.</p>`;
+  document.querySelectorAll("[data-del]").forEach(btn => btn.onclick = async () => {
+    if (!confirm("Delete this book and its files?")) return;
+    await fetch(`/api/books/${encodeURIComponent(btn.dataset.del)}`, { method: "DELETE" });
+    loadBooks();
+  });
+}
+
+let timer;
+$("q").oninput = () => {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    const q = $("q").value.trim();
+    if (!q) { $("hits").innerHTML = ""; return; }
+    const hits = await (await fetch(`/api/search?q=${encodeURIComponent(q)}`)).json();
+    $("hits").innerHTML = hits.length ? hits.map(h => `
+      <div class="hit"><strong>${esc(h.title)}</strong> —
+        ${h.pdf ? `<a href="/files/${encodeURIComponent(h.slug)}/${encodeURIComponent(h.pdf)}#page=${h.page}" target="_blank">page ${h.page}</a>` : `page ${h.page}`}
+        <div class="snip">${esc(h.snippet).replace(/\[(.*?)\]/, "<mark>$1</mark>")}</div></div>`).join("")
+      : `<p class="empty">No matches.</p>`;
+  }, 250);
+};
+
+loadBooks();
+</script>
+</body>
+</html>
