@@ -35,3 +35,6 @@ include = ["digibook*"]
 
 [tool.setuptools.package-data]
 digibook = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

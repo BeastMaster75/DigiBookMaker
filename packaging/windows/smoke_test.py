@@ -10,6 +10,7 @@ import cv2
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from synth import CJK_FONT, ENGLISH, JAPANESE, LATIN_FONT, PHOTO_BOX, photograph, render_page  # noqa: E402
 
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # Windows console is cp1252
 exe = Path(sys.argv[1]).resolve()
 work = Path(sys.argv[2]).resolve()
 photos = work / "photos"
