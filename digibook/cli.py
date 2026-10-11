@@ -61,6 +61,13 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_gui(args: argparse.Namespace) -> int:
+    from .gui import main as gui_main
+
+    gui_main(args.library if args.library != DEFAULT_LIBRARY else None)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="digibook", description=__doc__)
     p.add_argument("--library", default=DEFAULT_LIBRARY, help="library folder (default: ./library)")
@@ -89,6 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     ls = sub.add_parser("list", help="list books in the library")
     ls.set_defaults(func=cmd_list)
+
+    g = sub.add_parser("gui", help="open the desktop window")
+    g.set_defaults(func=cmd_gui)
 
     sv = sub.add_parser("serve", help="start the upload web page")
     sv.add_argument("--host", default="127.0.0.1")

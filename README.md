@@ -14,7 +14,18 @@ A 10-page book takes about 10–15 seconds on a normal laptop.
 
 ---
 
-## Quick start (easiest: Docker)
+## Windows: just download and run
+
+1. Go to this repository's **Releases** page and open **DigiBookMaker for Windows (latest build)**.
+2. Download **DigiBookMaker-Windows.zip** and unzip it (right-click, then *Extract All*).
+3. Double-click **DigiBookMaker.exe**. Nothing else to install: the text reader and the Japanese and Arabic language data are inside.
+4. Click **Add photos…** (or drag photos onto the list), check the page order, press **Make book**, then **Open PDF**.
+
+Books are saved in `Documents\DigiBookMaker`. If Windows says *"Windows protected your PC"*, click **More info**, then **Run anyway** (the app isn't signed with a paid certificate).
+
+The `.exe` is built and tested automatically by GitHub Actions on Windows (`.github/workflows/windows-app.yml`).
+
+## Quick start (Docker)
 
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then in this folder run:
 
@@ -41,7 +52,8 @@ brew install tesseract tesseract-lang
 Then:
 ```bash
 pip install .
-digibook serve            # web page at http://localhost:8000
+digibook gui              # desktop window
+digibook serve            # or: web page at http://localhost:8000
 ```
 
 ## Command line
@@ -115,7 +127,8 @@ How it works, in `digibook/`:
 | `pdf.py` | build the PDF: page image, invisible text, highlight notes |
 | `library.py` | SQLite full-text search (trigram, handles Japanese and Arabic) |
 | `pipeline.py` | runs it all, in parallel |
-| `web.py`, `static/` | the upload page |
+| `gui.py` | the desktop window (used by the Windows app) |
+| `web.py`, `static/` | the upload web page |
 
 ## Licence
 

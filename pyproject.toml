@@ -27,6 +27,9 @@ dev = ["pytest>=8"]
 [project.scripts]
 digibook = "digibook.cli:main"
 
+[project.gui-scripts]
+digibook-gui = "digibook.gui:main"
+
 [tool.setuptools.packages.find]
 include = ["digibook*"]
 

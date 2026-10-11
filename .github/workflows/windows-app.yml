@@ -1,0 +1,87 @@
+name: Windows app
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Tesseract
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-jpn tesseract-ocr-jpn-vert tesseract-ocr-ara fonts-noto-cjk fonts-dejavu-core
+      - run: pip install -e ".[dev]" httpx
+      - run: pytest -q
+
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: pip install . pyinstaller tkinterdnd2
+
+      - name: Install Tesseract and language data
+        shell: pwsh
+        run: |
+          choco install tesseract -y --no-progress
+          $src = "C:\Program Files\Tesseract-OCR"
+          if (-not (Test-Path "$src\tesseract.exe")) { throw "Tesseract not found at $src" }
+          New-Item -ItemType Directory -Force build | Out-Null
+          Copy-Item $src build\tesseract -Recurse
+          # Keep the configs/pdf font, use our own set of languages.
+          Get-ChildItem build\tesseract\tessdata\*.traineddata | Remove-Item
+          foreach ($l in "eng", "osd", "jpn", "jpn_vert", "ara") {
+            Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/$l.traineddata" -OutFile "build\tesseract\tessdata\$l.traineddata"
+          }
+          Remove-Item build\tesseract\doc, build\tesseract\*.html -Recurse -ErrorAction SilentlyContinue
+          & build\tesseract\tesseract.exe --version
+          & build\tesseract\tesseract.exe --tessdata-dir build\tesseract\tessdata --list-langs
+
+      - name: Build DigiBookMaker.exe
+        run: >
+          pyinstaller --noconfirm --windowed --name DigiBookMaker
+          --collect-all tkinterdnd2 --collect-all pypdfium2 --collect-all pypdfium2_raw
+          --collect-all pillow_heif --collect-all pikepdf --collect-data digibook
+          --add-data "build/tesseract;tesseract"
+          --exclude-module fastapi --exclude-module uvicorn --exclude-module starlette
+          packaging/windows/app.py
+
+      - name: Smoke test the .exe
+        run: python packaging/windows/smoke_test.py dist/DigiBookMaker/DigiBookMaker.exe smoke
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Copy-Item packaging\windows\READ_ME_FIRST.txt dist\DigiBookMaker\
+          Compress-Archive -Path dist\DigiBookMaker -DestinationPath DigiBookMaker-Windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DigiBookMaker-Windows
+          path: DigiBookMaker-Windows.zip
+
+      - name: Publish download
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-latest
+          name: DigiBookMaker for Windows (latest build)
+          prerelease: true
+          body: |
+            Download **DigiBookMaker-Windows.zip**, unzip it, and double-click **DigiBookMaker.exe**.
+            Nothing else to install. Built from ${{ github.sha }}.
+          files: DigiBookMaker-Windows.zip

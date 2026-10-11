@@ -1,5 +1,3 @@
-import cv2
-
 from digibook.enhance import flatten_lighting
 from digibook.highlights import detect_highlights
 from synth import ENGLISH, LATIN_FONT, render_page

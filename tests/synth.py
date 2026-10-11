@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-FONT_DIRS = ["/usr/share/fonts", "/System/Library/Fonts", "/Library/Fonts"]
+FONT_DIRS = ["/usr/share/fonts", "/System/Library/Fonts", "/Library/Fonts", "C:/Windows/Fonts"]
 
 
 def find_font(*names: str) -> str | None:
@@ -20,9 +20,10 @@ def find_font(*names: str) -> str | None:
     return None
 
 
-LATIN_FONT = find_font("DejaVuSerif.ttf", "DejaVuSans.ttf")
-CJK_FONT = find_font("NotoSerifCJK-Regular.ttc", "NotoSansCJK-Regular.ttc", "NotoSerifCJK-Bold.ttc")
-ARABIC_FONT = find_font("DejaVuSans.ttf", "NotoNaskhArabic-Regular.ttf")
+LATIN_FONT = find_font("DejaVuSerif.ttf", "DejaVuSans.ttf", "georgia.ttf", "arial.ttf")
+CJK_FONT = find_font("NotoSerifCJK-Regular.ttc", "NotoSansCJK-Regular.ttc", "NotoSerifCJK-Bold.ttc",
+                     "msgothic.ttc", "YuGothM.ttc", "msmincho.ttc")
+ARABIC_FONT = find_font("DejaVuSans.ttf", "NotoNaskhArabic-Regular.ttf", "arial.ttf")
 
 ENGLISH = [
     "Chapter One", "",

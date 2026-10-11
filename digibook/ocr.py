@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -60,20 +61,53 @@ class Osd:
     script_conf: float = 0.0
 
 
+WINDOWS_PATHS = [
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
+]
+
+
+def _bundled_tesseract() -> str | None:
+    """Tesseract packed inside the Windows app (see packaging/windows)."""
+    base = getattr(sys, "_MEIPASS", None)
+    if not base:
+        return None
+    exe = Path(base) / "tesseract" / ("tesseract.exe" if os.name == "nt" else "tesseract")
+    if not exe.is_file():
+        return None
+    os.environ["TESSDATA_PREFIX"] = str(exe.parent / "tessdata")  # ours, not a system install
+    return str(exe)
+
+
+@functools.lru_cache(maxsize=1)
 def tesseract_bin() -> str:
-    exe = os.environ.get("TESSERACT_CMD") or shutil.which("tesseract")
+    exe = os.environ.get("TESSERACT_CMD") or _bundled_tesseract() or shutil.which("tesseract")
+    if not exe and os.name == "nt":
+        exe = next((p for p in WINDOWS_PATHS if os.path.isfile(p)), None)
     if not exe:
         raise TesseractMissing(
-            "Tesseract is not installed. Install it with language packs, e.g. "
-            "`sudo apt install tesseract-ocr tesseract-ocr-jpn tesseract-ocr-jpn-vert "
-            "tesseract-ocr-ara` or `brew install tesseract tesseract-lang`, or use the Docker image."
+            "Tesseract (the text reader) is not installed. On Windows, install it from "
+            "https://github.com/UB-Mannheim/tesseract/wiki and tick Japanese, Japanese (vertical) "
+            "and Arabic under 'Additional language data'. On Linux: `sudo apt install tesseract-ocr "
+            "tesseract-ocr-jpn tesseract-ocr-jpn-vert tesseract-ocr-ara`. "
+            "On macOS: `brew install tesseract tesseract-lang`."
         )
     return exe
 
 
+def _run(cmd: list[str], timeout: int = 600) -> subprocess.CompletedProcess:
+    # Pages are processed in parallel; keep each Tesseract single-threaded.
+    env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
+    # On Windows, don't flash a console window for every Tesseract call.
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", env=env, timeout=timeout, creationflags=flags)
+
+
 @functools.lru_cache(maxsize=1)
 def available_langs() -> frozenset[str]:
-    out = subprocess.run([tesseract_bin(), "--list-langs"], capture_output=True, text=True)
+    out = _run([tesseract_bin(), "--list-langs"], timeout=60)
     langs = {ln.strip() for ln in out.stdout.splitlines()[1:] if ln.strip()}
     return frozenset(langs)
 
@@ -84,14 +118,13 @@ def _filter_lang(lang: str) -> str | None:
     return "+".join(dict.fromkeys(parts)) or None
 
 
-def _env() -> dict:
-    # Pages are processed in parallel; keep each Tesseract single-threaded.
-    return {**os.environ, "OMP_THREAD_LIMIT": "1"}
-
-
 def _write_png(img: np.ndarray, folder: str) -> str:
     path = os.path.join(folder, "page.png")
-    cv2.imwrite(path, img)
+    # imencode + write instead of imwrite: works with non-ASCII paths on Windows.
+    ok, data = cv2.imencode(".png", img)
+    if not ok:
+        raise RuntimeError("Could not encode page image")
+    Path(path).write_bytes(data.tobytes())
     return path
 
 
@@ -100,10 +133,8 @@ def detect_osd(img: np.ndarray, dpi: int = 300) -> Osd:
     with tempfile.TemporaryDirectory() as tmp:
         path = _write_png(img, tmp)
         try:
-            out = subprocess.run(
-                [tesseract_bin(), path, "stdout", "--psm", "0", "--dpi", str(dpi)],
-                capture_output=True, text=True, env=_env(), timeout=120,
-            ).stdout
+            out = _run([tesseract_bin(), path, "stdout", "--psm", "0", "--dpi", str(dpi)],
+                       timeout=120).stdout
         except (subprocess.SubprocessError, OSError):
             return Osd()
     osd = Osd()
@@ -178,7 +209,7 @@ def run_ocr(img: np.ndarray, lang: str, dpi: int = 300, psm: int = 3) -> OcrResu
         base = os.path.join(tmp, "out")
         cmd = [tesseract_bin(), path, base, "-l", lang, "--psm", str(psm), "--dpi", str(dpi),
                "-c", "textonly_pdf=1", "pdf", "tsv"]
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=_env(), timeout=600)
+        proc = _run(cmd)
         if proc.returncode != 0:
             raise RuntimeError(f"Tesseract failed ({lang}): {proc.stderr.strip()[-500:]}")
         words = _parse_tsv(Path(base + ".tsv"))

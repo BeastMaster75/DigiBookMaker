@@ -1,7 +1,6 @@
 import json
 
 import cv2
-import numpy as np
 import pikepdf
 import pypdfium2 as pdfium
 
